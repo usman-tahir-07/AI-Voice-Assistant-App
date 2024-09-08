@@ -1,0 +1,7 @@
+streamlit
+langchain
+langchain-community
+audio_recorder_streamlit
+langchain_groq
+pyttsx3
+groq
