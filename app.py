@@ -2,43 +2,53 @@ import base64
 import streamlit as st
 from audio_recorder_streamlit import audio_recorder
 from langchain_groq import ChatGroq
-from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
-from openai import OpenAI
+from groq import Groq
+from langchain_core.output_parsers import StrOutputParser
+import pyttsx3
 
 load_dotenv()
 
-client = OpenAI()
+client = Groq()
 
 def audio_to_text(file_path):
     with open(file_path,"rb") as audio_file:
         transcription = client.audio.transcriptions.create(
-            model="whisper-1",
-            file=audio_file
+            model="whisper-large-v3",
+            file=audio_file,
+            temperature=0.0
         )
         return transcription.text
 
 def get_ai_response(text):
-    # llm_groq = ChatGroq(model = "llama3-8b-8192")
-    llm_openai = ChatOpenAI()
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant"
+    )
     template = '''
     You are a helpful AI Assistant, you have to answer the user queries.
     User Query: {text}
     Answer:  
     '''
     prompt = PromptTemplate.from_template(template=template)
-    chain = prompt | llm_openai
-    response = chain.invoke({"text":text}).content
+    chain = prompt | llm | StrOutputParser()
+    response = chain.invoke({"text":text})
     return response
 
-def text_to_audio(text,audio_path):
-    response = client.audio.speech.create(
-        model="tts-1",
-        voice="nova",
-        input=text
-    )
-    response.stream_to_file(audio_path)
+class TextToSpeechEngine:
+    def __init__(self):
+        self.engine = pyttsx3.init()
+    def speak(self, text, play = True, save = False, filename = "output.mp3"):
+        if save:
+            self.engine.save_to_file(text, filename)
+            self.engine.runAndWait()
+        if play:
+            self.engine.say(text)
+            self.engine.runAndWait()
+
+def text_to_audio(text):
+    tts_engine = TextToSpeechEngine()
+    tts_engine.speak(text, play = False, save = True)
 
 # Text card function
 def create_text_card(text, title = "AI Response"):
@@ -87,10 +97,12 @@ def main():
         create_text_card(transcribed_text,"Audio Transcription")
         ai_response = get_ai_response(transcribed_text)
         if ai_response:
-            response_audio_file = "response_audio.mp3"
-            text_to_audio(ai_response,response_audio_file)
-            auto_play_audio(response_audio_file)
-            create_text_card(ai_response,"AI Response")
+            cleaned_text = ai_response.replace('*','')
+            text_to_audio(cleaned_text)
+            file_path = "output.mp3"
+            auto_play_audio(file_path)
+            st.header("AI Response: ")
+            st.write(ai_response)
 
 if __name__ == "__main__":
     main()
